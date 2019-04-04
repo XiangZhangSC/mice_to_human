@@ -76,30 +76,22 @@ transformed data {
   //}
 }
 parameters {
-  //vector[n_bw0_mis] z_bw0_mis;
+  //vector<lower=0>[n_bw0_mis] bw0_mis;
   real<lower=0> mu_bw0;
   real<lower=0> sigma_bw0;
-  //vector[n_mouse] z_fi;
+  //vector<lower=0>[n_mouse] fi; // food intake g/day
   real<lower=0> mu_fi; 
   real<lower=0> sigma_fi;
   //vector<lower=0,upper=1>[n_mouse] fer_max; // maximal feed efficiency ratio (g BW gain/g food)
   real<lower=0> a_fer_max;
   real<lower=0> b_fer_max;
-  //vector[n_mouse] z_bw_max;
+  //vector<lower=0>[n_mouse] bw_max; // maximal body weight
   real<lower=0> mu_bw_max;
   real<lower=0> sigma_bw_max;
   //vector<lower=0>[n_metabolite] sigma;
 }
 transformed parameters {
-  //vector<lower=0>[n_bw0_mis] bw0_mis;
-  //real<lower=0> par[n_mouse,n_par]; // each mouse has its own set of parameters
-  //vector<lower=0>[n_mouse] fi; // food intake g/day
-  //vector<lower=0>[n_mouse] bw_max; // maximal body weight
-  
-  //bw0_mis = mu_bw0 + sigma_bw0 * z_bw0_mis;
-  
-  //fi = mu_fi + sigma_fi * z_fi;
-  //bw_max = mu_bw_max + sigma_bw_max * z_bw_max;
+  //real<lower=0> par[n_mouse,n_par]; // each mouse has its own set of parametersW
   
   //for ( i in 1:n_mouse ) {
   //  par[i,1] = fi[i];
@@ -117,17 +109,16 @@ model {
   //bw0[which_bw0_obs] = bw0_obs;
   //bw0[which_bw0_mis] = bw0_mis;
   
-  //bw0_obs ~ normal( mu_bw0, sigma_bw0 ); 
-  //z_bw0_mis ~ normal( 0, 1 )
+  //bw0 ~ normal( mu_bw0, sigma_bw0 ); 
   mu_bw0 ~ normal( 32, 1.2 );
-  sigma_bw0 ~ lognormal( -0.06, 0.01 ); // 2.56 g -> log(2.56) = 0.94
+  sigma_bw0 ~ lognormal( -0.06, 0.01 ); 
   
   //for ( i in 1:n_mouse ) {
   //  z0[i,1] = F0;
   //  z0[i,2] = bw0[i];
   //}
   
-  //z_fi ~ normal( 0, 1 );
+  //fi ~ normal( mu_fi, sigma_fi );
   mu_fi ~ normal( 4.4, 0.1 );  // 4.4 g/day N = 28
   sigma_fi ~ lognormal( -1, 0.01 ); 
   
@@ -135,7 +126,7 @@ model {
   a_fer_max ~ exponential( 1 );
   b_fer_max ~ exponential( 1 );
   
-  //z_bw_max ~ normal( 0, 1 );
+  //bw_max ~ normal( mu_bw_max, sigma_bw_max );
   mu_bw_max ~ normal( 49.7, 1.1 ); // N = 51
   sigma_bw_max ~ lognormal( 0, 0.01 ); // 
   
@@ -176,7 +167,7 @@ generated quantities {
   real y_pred[1+n_day_pred, n_metabolite];
   
   
-  bw0_pred = normal_rng( mu_bw0, sigma_bw0 ); // (g)
+  bw0_pred = normal_rng( mu_bw0, sigma_bw0 );
   
   z0_pred[1] = 0;
   z0_pred[2] = bw0_pred;
