@@ -179,9 +179,9 @@ generated quantities {
   z_pred = integrate_ode_bdf(mingled, z0_pred, t0, ts_pred, par_pred, x_r_pred, x_i_pred);
   
   y_pred[1,1] = z0_pred[1];
-  y_pred[1,2] = z0_pred[2];
+  y_pred[1,2] = normal_rng(z0_pred[2], sigma[2]);
   for ( i in 1:n_day_pred ) {
-    y_pred[i+1,1] = z_pred[i,1];
-    y_pred[i+1,2] = z_pred[i,2];
+    y_pred[i+1,1] = normal_rng(z_pred[i,1], sigma[1]);
+    y_pred[i+1,2] = normal_rng(z_pred[i,2], sigma[2]);
   }
 }
