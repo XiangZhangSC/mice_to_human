@@ -105,6 +105,10 @@ tidy(mingled.mcmc, pars = c("fer_max", "bw_max"), estimate.method = "mean", conf
 
 tidy(mingled.mcmc, pars = c("mu_fi", "sigma_fi"), estimate.method = "mean", conf.int = TRUE, conf.level = 0.95, conf.method = "HPDinterval")
 
+tidy(mingled.mcmc, pars = c("mu_bw_max", "sigma_bw_max"), estimate.method = "mean", conf.int = TRUE, conf.level = 0.95, conf.method = "HPDinterval")
+
+tidy(mingled.mcmc, pars = c("fer_max_a", "fer_max_b"), estimate.method = "mean", conf.int = TRUE, conf.level = 0.95, conf.method = "HPDinterval")
+
 post <- tidy_draws(mingled.mcmc)
 
 fer <- post %>% 
@@ -175,6 +179,8 @@ fer2rna.sig <- fer2rna %>%
   summarise(`Median beta` = median(estimate), 
             `How many times FDR is below 0.05` = sum(FDR < 0.05)) %>% 
   arrange(desc(`How many times FDR is below 0.05`))
+
+fer2rna.sig
 
 write_rds(fer2rna.sig, "result_genes_associated_FE.rds")
 
