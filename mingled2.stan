@@ -131,7 +131,9 @@ model {
   fer_max_a ~ exponential( 1 );
   fer_max_b ~ exponential( 1 );
   
-  bw_max ~ exponential( 0.02 );
+  bw_max ~ normal( mu_bw_max, sigma_bw_max );
+  mu_bw_max ~ normal( 50, 1.2 );
+  sigma_bw_max ~ lognormal( 0, 0.01 );
   
   sigma ~ exponential( 1 );
   
@@ -182,8 +184,8 @@ generated quantities {
   z0_pred[2] = bw0_pred;
   
   par_pred[1] = normal_rng( mu_fi, sigma_fi );
-  par_pred[2] = fer_max;
-  par_pred[3] = bw_max;
+  par_pred[2] = beta_rng( fer_max_a, fer_max_b );
+  par_pred[3] = normal_rng( mu_bw_max, sigma_bw_max );
   
   z_pred = integrate_ode_bdf(mingled, z0_pred, t0, ts_pred, par_pred, x_r_pred, x_i_pred);
   
@@ -199,7 +201,7 @@ generated quantities {
     z0[i,2] = bw0[i];
     
     z_sacrifice[i,,] = integrate_ode_bdf(mingled, z0[i], t0, t_sacrifice[i,], par[i,], x_r_pred, x_i_pred);
-    fer_sacrifice[i] = fer_max * (1 - z_sacrifice[i,1,2] / bw_max);
+    fer_sacrifice[i] = fer_max[i] * (1 - z_sacrifice[i,1,2] / bw_max[i]);
   }
   
   // Simulate Rozendaal experimental data
