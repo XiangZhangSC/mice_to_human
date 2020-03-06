@@ -12,47 +12,14 @@ library(multidplyr)
 library(broom)
 library(stringr)
 library(forcats)
-library(limma)
-library(biobroom)
 
-run_voomlimma <- function(dat.x, dat.y) {
-  # scale x so that the center is 10% and 1 unit refers to 1%
-  x <- (dat.x$fer - 0.1) / 0.01
-  Batch <- factor(dat.x$Reagent)
-  zAge <- (dat.x$age_day - 250) / 30
-  mod1 <- model.matrix(~Batch + zAge + x)
-  #mod0 <- model.matrix(~Batch)
-  #dat.y.voomed.tmp <- voom(dat.y, design = mod1, normalize.method = "none")
-  
-  #svobj <- sva(dat.y.voomed.tmp$E,mod1,mod0)
-  #modSv <- cbind(mod1,svobj$sv)
-  
-  #dat.y.voomed <- voom(dat.y, design = modSv, normalize.method = "none")
-  dat.y.voomed <- voom(dat.y, design = mod1, normalize.method = "none")
-  my_fits <- lmFit(dat.y.voomed$E, design = dat.y.voomed$design, weights = dat.y.voomed$weights)
-  my_fits <- eBayes(my_fits)
-  my_stats <- tidy(my_fits) %>% 
-    filter(term == "x") %>% 
-    select(gene, estimate, statistic, p.value) %>% 
-    inner_join(gene.annotation, by = "gene")
-  
-  my_stats$FDR <- p.adjust(my_stats$p.value, method = "BH")
-  
-  return(my_stats)
-}
 
 run_edgeR <- function(dat.x, dat.y) {
-  # scale x so that the center is 10% and 1 unit refers to 1%
-  x <- (dat.x$fer - 0.1) / 0.01
+  x <- ( dat.x$fer - mean(dat.x$fer) ) / sd(dat.x$fer)
   Batch <- factor(dat.x$Reagent)
-  zAge <- (dat.x$age_day - 250) / 30
+  zAge <- (dat.x$age_day - mean(dat.x$age_day)) / sd(dat.x$age_day)
   mod1 <- model.matrix(~Batch + zAge + x)
-  #mod0 <- model.matrix(~Batch)
-  #svseq <- svaseq(dat.y,mod1,mod0)
-  #modSv <- cbind(mod1,svseq$sv)
-  #my_dispersions <- estimateDisp(dat.y, design = modSv)
   my_dispersions <- estimateDisp(dat.y, design = mod1)
-  #my_fits <- glmFit(dat.y, design = modSv, dispersion = my_dispersions$tagwise.dispersion, offset = log(colSums(dat.y)))
   my_fits <- glmFit(dat.y, design = mod1, dispersion = my_dispersions$tagwise.dispersion, offset = log(sequencing_depth$N))
   my_tests <- glmLRT(my_fits, coef = "x")
   my_stats <- my_tests$table %>% 
@@ -131,44 +98,12 @@ nonzero_counts <- rna %>%
 keep_genes <- nonzero_counts %>% 
   filter(n_nonzero >= 43)
 
-# Batch effect
 
-rna.logCPM <- rna %>% 
-  gather(mouse, y, -probe, -`gene name`) %>% 
-  left_join(sequencing_depth, by = "mouse") %>% 
-  mutate(logCPM = log2((y + 0.5) / (N + 1) * 10^6))
+mingled.mcmc <- read_stan_csv("~/cmdstan-2.19.1/mingled/output.csv")
 
-dat.logCPM <- rna.logCPM %>% 
-  select(probe, mouse, logCPM) %>% 
-  spread(mouse, logCPM) %>% 
-  column_to_rownames("probe") %>% 
-  as.matrix()
+tidy(mingled.mcmc, pars = c("fer_max", "bw_max"), estimate.method = "mean", conf.int = TRUE, conf.level = 0.95, conf.method = "HPDinterval")
 
-my_pca <- prcomp(t(dat.logCPM), center = TRUE, scale. = TRUE, retx = TRUE)
-
-my_pca.df <- my_pca$x %>% 
-  as.data.frame() %>% 
-  rownames_to_column() %>% 
-  rename(mouse = rowname) %>% 
-  tbl_df() %>% 
-  select(mouse, PC1:PC4) %>% 
-  left_join(mouse_rna.df, by = "mouse")
-
-plot(my_pca$sdev^2 / sum(my_pca$sdev^2))
-
-## Batch effect due to Reagent
-ggplot(my_pca.df, aes(PC1, PC2)) + 
-  geom_point(aes(color = Reagent), size = 3)
-
-ggplot(my_pca.df, aes(PC1, PC3)) + 
-  geom_point(aes(color = Reagent), size = 3)
-
-ggplot(my_pca.df, aes(PC2, PC3)) + 
-  geom_point(aes(color = age_day), size = 3) + 
-  scale_color_gradient2(low = "blue", mid = "white", high = 'red', midpoint = 250)
-
-#mingled.mcmc <- read_stan_csv("~/stan/cmdstan-2.19.1/MINGLeD/output.csv")
-mingled.mcmc <- read_stan_csv("~/stan/cmdstan-2.19.1/MINGLeD2/output.csv")
+tidy(mingled.mcmc, pars = c("mu_fi", "sigma_fi"), estimate.method = "mean", conf.int = TRUE, conf.level = 0.95, conf.method = "HPDinterval")
 
 post <- tidy_draws(mingled.mcmc)
 
@@ -192,7 +127,7 @@ ggplot(fer, aes(fct_inorder(mouse), fer)) +
         axis.title.y = element_text(size = 15),
         axis.text.x = element_text(angle = 90))
 
-ggsave("fe_sacrifice.pdf", height = 200, width = 220, units = "mm", dpi = 300)
+#ggsave("fe_sacrifice.pdf", height = 200, width = 220, units = "mm", dpi = 300)
 
 dat.rna <- rna %>% 
   semi_join(keep_genes, by = "probe") %>% 
@@ -209,26 +144,7 @@ fer.nested <- fer %>%
 
 identical(sequencing_depth$mouse, colnames(dat.rna))
 
-xiang_cluster <- new_cluster(n = 11) %>% 
-  cluster_library("edgeR") %>% 
-  cluster_library("limma") %>% 
-  cluster_library("biobroom") %>% 
-  cluster_library("dplyr") %>% 
-  cluster_library("purrr") %>% 
-  cluster_library("tibble") %>% 
-  cluster_assign_value("run_voomlimma", run_voomlimma) %>% 
-  cluster_assign_value("run_edgeR", run_edgeR) %>% 
-  cluster_assign_value("dat.rna", dat.rna) %>% 
-  cluster_assign_value("gene.annotation", gene.annotation) %>% 
-  cluster_assign_value("sequencing_depth", sequencing_depth)
-
-fer.nested <- fer.nested %>% 
-  partition(.iteration, cluster = xiang_cluster) %>% 
-  mutate(result = map(data, ~run_edgeR(dat.x = .x, dat.y = dat.rna))) %>% 
-  collect() %>% 
-  as_tibble()
-
-xiang_cluster <- new_cluster(n = 11) %>% 
+xiang_cluster <- new_cluster(n = 22) %>% 
   cluster_library("edgeR") %>% 
   cluster_library("limma") %>% 
   cluster_library("biobroom") %>% 
@@ -263,12 +179,12 @@ fer2rna.sig <- fer2rna %>%
 write_rds(fer2rna.sig, "result_genes_associated_FE.rds")
 
 fer2rna %>% 
-  filter(symbol %in% "Krt23") %>% 
+  filter(symbol %in% "Txnip") %>% 
   ggplot(aes(estimate)) + 
   geom_histogram(bins = 50) + 
   geom_vline(xintercept = 0, linetype = "dashed", color = "red") + 
-  labs(title = "Krt23", 
-       x = "Mean difference in expression due to 1% increase in feed efficiency", 
+  labs(title = "Txnip", 
+       x = "Mean difference in expression due to 1 standard deviation increase in feed efficiency", 
        y = NULL) + 
   theme_bw() + 
   theme(axis.title.x = element_text(size = 15), 
@@ -352,3 +268,5 @@ ggplot(fife, aes(x = fer_estimate, y = fi_estimate)) +
   theme_bw() + 
   theme(axis.title = element_text(size = 12), 
         axis.text = element_text(size = 12))
+
+tidy(mingled.mcmc, pars = c("fer_max", "bw_max"))
