@@ -143,6 +143,7 @@ dat.rna <- rna %>%
 dat.rna <- dat.rna[,sort(unique(fer$mouse))]
 
 fer.nested <- fer %>% 
+  arrange(mouse) %>% 
   group_by(.iteration) %>% 
   nest()
 
@@ -180,7 +181,8 @@ fer2rna.sig <- fer2rna %>%
             `How many times FDR is below 0.05` = sum(FDR < 0.05)) %>% 
   arrange(desc(`How many times FDR is below 0.05`))
 
-fer2rna.sig
+fer2rna.sig %>% 
+  filter(`How many times FDR is below 0.05` > 500)
 
 write_rds(fer2rna.sig, "result_genes_associated_FE.rds")
 
