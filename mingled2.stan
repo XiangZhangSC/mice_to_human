@@ -87,12 +87,8 @@ parameters {
   vector<lower=0>[n_mouse] fi; // food intake g/day
   real<lower=0> mu_fi; 
   real<lower=0> sigma_fi;
-  vector<lower=0,upper=1>[n_mouse] fer_max; // maximal feed efficiency ratio (g BW gain/g food)
-  real<lower=0> fer_max_a; 
-  real<lower=0> fer_max_b;
-  vector<lower=0>[n_mouse] bw_max; // maximal body weight
-  real<lower=0> mu_bw_max;
-  real<lower=0> sigma_bw_max;
+  real<lower=0,upper=1> fer_max; // maximal feed efficiency ratio (g BW gain/g food)
+  real<lower=0> bw_max; // maximal body weight
   vector<lower=0>[n_metabolite] sigma;
 }
 transformed parameters {
@@ -100,8 +96,8 @@ transformed parameters {
   
   for ( i in 1:n_mouse ) {
     par[i,1] = fi[i];
-    par[i,2] = fer_max[i];
-    par[i,3] = bw_max[i];
+    par[i,2] = fer_max;
+    par[i,3] = bw_max;
   }
 }
 model {
@@ -127,13 +123,9 @@ model {
   mu_fi ~ normal( 2.5, 0.1 );
   sigma_fi ~ exponential( 1 ); 
   
-  fer_max ~ beta( fer_max_a, fer_max_b );
-  fer_max_a ~ exponential( 1 );
-  fer_max_b ~ exponential( 1 );
+  fer_max ~ beta( 2, 8 );
   
-  bw_max ~ normal( mu_bw_max, sigma_bw_max );
-  mu_bw_max ~ normal( 50, 1.2 );
-  sigma_bw_max ~ lognormal( 0, 0.01 );
+  bw_max ~ exponential( 0.02 );
   
   sigma ~ exponential( 1 );
   
@@ -184,8 +176,8 @@ generated quantities {
   z0_pred[2] = bw0_pred;
   
   par_pred[1] = normal_rng( mu_fi, sigma_fi );
-  par_pred[2] = beta_rng( fer_max_a, fer_max_b );
-  par_pred[3] = normal_rng( mu_bw_max, sigma_bw_max );
+  par_pred[2] = fer_max;
+  par_pred[3] = bw_max;
   
   z_pred = integrate_ode_bdf(mingled, z0_pred, t0, ts_pred, par_pred, x_r_pred, x_i_pred);
   
@@ -201,7 +193,7 @@ generated quantities {
     z0[i,2] = bw0[i];
     
     z_sacrifice[i,,] = integrate_ode_bdf(mingled, z0[i], t0, t_sacrifice[i,], par[i,], x_r_pred, x_i_pred);
-    fer_sacrifice[i] = fer_max[i] * (1 - z_sacrifice[i,1,2] / bw_max[i]);
+    fer_sacrifice[i] = fer_max * (1 - z_sacrifice[i,1,2] / bw_max);
   }
   
   // Simulate Rozendaal experimental data
