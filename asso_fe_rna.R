@@ -105,10 +105,6 @@ tidy(mingled.mcmc, pars = c("fer_max", "bw_max"), estimate.method = "mean", conf
 
 tidy(mingled.mcmc, pars = c("mu_fi", "sigma_fi"), estimate.method = "mean", conf.int = TRUE, conf.level = 0.95, conf.method = "HPDinterval")
 
-tidy(mingled.mcmc, pars = c("mu_bw_max", "sigma_bw_max"), estimate.method = "mean", conf.int = TRUE, conf.level = 0.95, conf.method = "HPDinterval")
-
-tidy(mingled.mcmc, pars = c("fer_max_a", "fer_max_b"), estimate.method = "mean", conf.int = TRUE, conf.level = 0.95, conf.method = "HPDinterval")
-
 post <- tidy_draws(mingled.mcmc)
 
 fer <- post %>% 
@@ -148,6 +144,7 @@ fer.nested <- fer %>%
   nest()
 
 identical(sequencing_depth$mouse, colnames(dat.rna))
+identical(fer.nested$data[[1]]$mouse, sequencing_depth$mouse)
 
 xiang_cluster <- new_cluster(n = 22) %>% 
   cluster_library("edgeR") %>% 
@@ -178,13 +175,25 @@ fer2rna <- fer.nested %>%
 fer2rna.sig <- fer2rna %>% 
   group_by(symbol) %>% 
   summarise(`Median beta` = median(estimate), 
+            `Low beta` = quantile(estimate, probs = 0.025), 
+            `High beta` = quantile(estimate, probs = 0.975), 
             `How many times FDR is below 0.05` = sum(FDR < 0.05)) %>% 
-  arrange(desc(`How many times FDR is below 0.05`))
-
-fer2rna.sig %>% 
-  filter(`How many times FDR is below 0.05` > 500)
+  arrange(`Median beta`)
 
 write_rds(fer2rna.sig, "result_genes_associated_FE.rds")
+
+fer2rna.sig %>% 
+  filter(`How many times FDR is below 0.05` >= 950) %>% 
+  mutate(symbol = fct_inorder(symbol)) %>% 
+  ggplot() + 
+  geom_pointrange(aes(x = symbol, y = `Median beta`, ymin = `Low beta`, ymax = `High beta`), shape = 1) + 
+  coord_flip() + 
+  labs(x = NULL, y = "Median regression coeffcient with 95% credible interval") + 
+  theme_bw() + 
+  theme(axis.text = element_text(size = 12), 
+        axis.title.x = element_text(size = 12))
+
+ggsave("asso_fer_liver_gene.pdf", height = 280, width = 220, units = "mm", dpi = 300)
 
 fer2rna %>% 
   filter(symbol %in% "Txnip") %>% 
