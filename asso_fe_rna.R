@@ -14,14 +14,19 @@ library(stringr)
 library(forcats)
 
 
-run_edgeR <- function(dat.x, dat.y) {
-  x <- ( dat.x$fer - mean(dat.x$fer) ) / sd(dat.x$fer)
+run_edgeR <- function(dat.x, dat.y, dat.z) {
+  fer <- dat.x$fer
+  tg <- dat.z$TG_umol_g_liver
+  
+  zFER <- ( fer - mean(fer) ) / sd(fer)
+  zTG <- ( tg - mean(tg) ) / sd(tg)
+  
   Batch <- factor(dat.x$Reagent)
   zAge <- (dat.x$age_day - mean(dat.x$age_day)) / sd(dat.x$age_day)
-  mod1 <- model.matrix(~Batch + zAge + x)
+  mod1 <- model.matrix(~Batch + zAge + zFER + zTG)
   my_dispersions <- estimateDisp(dat.y, design = mod1)
   my_fits <- glmFit(dat.y, design = mod1, dispersion = my_dispersions$tagwise.dispersion, offset = log(sequencing_depth$N))
-  my_tests <- glmLRT(my_fits, coef = "x")
+  my_tests <- glmLRT(my_fits, coef = "zFER")
   my_stats <- my_tests$table %>% 
     as.data.frame() %>% 
     rownames_to_column() %>% 
@@ -98,6 +103,13 @@ nonzero_counts <- rna %>%
 keep_genes <- nonzero_counts %>% 
   filter(n_nonzero >= 43)
 
+# Liver TG data
+liver_tg <- read_csv("Paalvalst_liver_TG_data.csv")
+liver_tg_rna <- liver_tg %>% 
+  filter(mouse %in% mouse_rna.df$mouse) %>% 
+  spread(what, y)
+
+# Feed efficiency
 
 mingled.mcmc <- read_stan_csv("~/cmdstan-2.19.1/mingled/output.csv")
 
@@ -145,6 +157,7 @@ fer.nested <- fer %>%
 
 identical(sequencing_depth$mouse, colnames(dat.rna))
 identical(fer.nested$data[[1]]$mouse, sequencing_depth$mouse)
+identical(liver_tg_rna$mouse, colnames(dat.rna))
 
 xiang_cluster <- new_cluster(n = 22) %>% 
   cluster_library("edgeR") %>% 
@@ -155,13 +168,14 @@ xiang_cluster <- new_cluster(n = 22) %>%
   cluster_library("tibble") %>% 
   cluster_copy("run_edgeR") %>% 
   cluster_copy("dat.rna") %>% 
+  cluster_copy("liver_tg_rna") %>% 
   cluster_copy("gene.annotation") %>% 
   cluster_copy("sequencing_depth")
 
 fer.nested <- fer.nested %>% 
   group_by(.iteration) %>% 
   partition(cluster = xiang_cluster) %>% 
-  mutate(result = map(data, ~run_edgeR(dat.x = .x, dat.y = dat.rna))) %>% 
+  mutate(result = map(data, ~run_edgeR(dat.x = .x, dat.y = dat.rna, dat.z = liver_tg_rna))) %>% 
   collect() %>% 
   as_tibble()
 
@@ -174,13 +188,16 @@ fer2rna <- fer.nested %>%
 
 fer2rna.sig <- fer2rna %>% 
   group_by(symbol) %>% 
-  summarise(`Median beta` = median(estimate), 
-            `Low beta` = quantile(estimate, probs = 0.025), 
-            `High beta` = quantile(estimate, probs = 0.975), 
+  summarise(`Mean FDR` = mean(FDR), 
+            `Low FDR` = quantile(FDR, probs = 0.025), 
+            `High FDR` = quantile(FDR, probs = 0.975), 
             `How many times FDR is below 0.05` = sum(FDR < 0.05)) %>% 
-  arrange(`Median beta`)
+  arrange(`Mean FDR`)
 
 write_rds(fer2rna.sig, "result_genes_associated_FE.rds")
+
+fer2rna.sig %>% 
+  arrange(desc(`How many times FDR is below 0.05`))
 
 fer2rna.sig %>% 
   filter(`How many times FDR is below 0.05` >= 950) %>% 
