@@ -14,16 +14,14 @@ library(stringr)
 library(forcats)
 
 
-run_edgeR <- function(dat.x, dat.y, dat.z) {
+run_edgeR <- function(dat.x, dat.y) {
   fer <- dat.x$fer
-  tg <- dat.z$TG_umol_g_liver
   
   zFER <- ( fer - mean(fer) ) / sd(fer)
-  zTG <- ( tg - mean(tg) ) / sd(tg)
   
   Batch <- factor(dat.x$Reagent)
   zAge <- (dat.x$age_day - mean(dat.x$age_day)) / sd(dat.x$age_day)
-  mod1 <- model.matrix(~Batch + zAge + zFER + zTG)
+  mod1 <- model.matrix(~Batch + zAge + zFER)
   my_dispersions <- estimateDisp(dat.y, design = mod1)
   my_fits <- glmFit(dat.y, design = mod1, dispersion = my_dispersions$tagwise.dispersion, offset = log(sequencing_depth$N))
   my_tests <- glmLRT(my_fits, coef = "zFER")
@@ -103,12 +101,6 @@ nonzero_counts <- rna %>%
 keep_genes <- nonzero_counts %>% 
   filter(n_nonzero >= 43)
 
-# Liver TG data
-liver_tg <- read_csv("Paalvalst_liver_TG_data.csv")
-liver_tg_rna <- liver_tg %>% 
-  filter(mouse %in% mouse_rna.df$mouse) %>% 
-  spread(what, y)
-
 # Feed efficiency
 
 mingled.mcmc <- read_stan_csv("~/cmdstan-2.19.1/mingled/output.csv")
@@ -157,7 +149,6 @@ fer.nested <- fer %>%
 
 identical(sequencing_depth$mouse, colnames(dat.rna))
 identical(fer.nested$data[[1]]$mouse, sequencing_depth$mouse)
-identical(liver_tg_rna$mouse, colnames(dat.rna))
 
 xiang_cluster <- new_cluster(n = 22) %>% 
   cluster_library("edgeR") %>% 
@@ -168,14 +159,13 @@ xiang_cluster <- new_cluster(n = 22) %>%
   cluster_library("tibble") %>% 
   cluster_copy("run_edgeR") %>% 
   cluster_copy("dat.rna") %>% 
-  cluster_copy("liver_tg_rna") %>% 
   cluster_copy("gene.annotation") %>% 
   cluster_copy("sequencing_depth")
 
 fer.nested <- fer.nested %>% 
   group_by(.iteration) %>% 
   partition(cluster = xiang_cluster) %>% 
-  mutate(result = map(data, ~run_edgeR(dat.x = .x, dat.y = dat.rna, dat.z = liver_tg_rna))) %>% 
+  mutate(result = map(data, ~run_edgeR(dat.x = .x, dat.y = dat.rna))) %>% 
   collect() %>% 
   as_tibble()
 
@@ -188,19 +178,14 @@ fer2rna <- fer.nested %>%
 
 fer2rna.sig <- fer2rna %>% 
   group_by(symbol) %>% 
-  summarise(`Mean FDR` = mean(FDR), 
-            `Low FDR` = quantile(FDR, probs = 0.025), 
-            `High FDR` = quantile(FDR, probs = 0.975), 
+  summarise(`Mean beta` = mean(estimate), 
+            `Low beta` = quantile(estimate, probs = 0.025), 
+            `High beta` = quantile(estimate, probs = 0.975), 
             `How many times FDR is below 0.05` = sum(FDR < 0.05)) %>% 
   arrange(`Mean FDR`)
 
-write_rds(fer2rna.sig, "result_genes_associated_FE.rds")
-
 fer2rna.sig %>% 
-  arrange(desc(`How many times FDR is below 0.05`))
-
-fer2rna.sig %>% 
-  filter(`How many times FDR is below 0.05` >= 950) %>% 
+  filter(`How many times FDR is below 0.05` >= 990) %>% 
   mutate(symbol = fct_inorder(symbol)) %>% 
   ggplot() + 
   geom_pointrange(aes(x = symbol, y = `Median beta`, ymin = `Low beta`, ymax = `High beta`), shape = 1) + 
@@ -212,95 +197,4 @@ fer2rna.sig %>%
 
 ggsave("asso_fer_liver_gene.pdf", height = 280, width = 220, units = "mm", dpi = 300)
 
-fer2rna %>% 
-  filter(symbol %in% "Txnip") %>% 
-  ggplot(aes(estimate)) + 
-  geom_histogram(bins = 50) + 
-  geom_vline(xintercept = 0, linetype = "dashed", color = "red") + 
-  labs(title = "Txnip", 
-       x = "Mean difference in expression due to 1 standard deviation increase in feed efficiency", 
-       y = NULL) + 
-  theme_bw() + 
-  theme(axis.title.x = element_text(size = 15), 
-        axis.text.x = element_text(size = 12), 
-        plot.title = element_text(size = 30))
 
-phenotype.paalvast <- read_rds("Paalvast2017.rds")
-liver.weight <- phenotype.paalvast %>% 
-  filter(what == "liver_g") %>% 
-  semi_join(mouse_rna.df, by = "mouse") %>% 
-  select(mouse, y) %>% 
-  rename(liver_g = y) %>% 
-  arrange(mouse)
-
-dat.x <- fer.nested$data[[1]]
-x <- (dat.x$fer - 0.1) / 0.01
-Batch <- factor(dat.x$Reagent)
-mod1 <- model.matrix(~Batch + x)
-
-Y <- voom(dat.rna, design = mod1, normalize.method = "none")
-myfit <- lmFit(Y, design = mod1, weights = Y$weights)
-myfit <- eBayes(myfit)
-myres <- tidy(myfit) %>% 
-  filter(term == "x") %>% 
-  select(gene, estimate, statistic, p.value) %>% 
-  inner_join(gene.annotation, by = "gene")
-
-myres$FDR <- p.adjust(myres$p.value, method = "BH")
-
-#mod0 <- model.matrix(~Batch)
-#svseq <- svaseq(dat.rna,mod1,mod0)
-#modSv <- cbind(mod1,svseq$sv)
-mod1 <- model.matrix(~Reagent + x)
-my_dispersions <- estimateDisp(dat.rna, design = mod1)
-my_fits <- glmFit(dat.rna, design = mod1, dispersion = my_dispersions$tagwise.dispersion, offset = log(colSums(dat.rna)))
-
-my_betas <- my_fits$coefficients %>% 
-  as.data.frame() %>% 
-  rownames_to_column() %>% 
-  tbl_df() %>% 
-  rename(gene = rowname) %>% 
-  select(gene, x)
-
-my_tests <- glmLRT(my_fits, coef = "x")
-my_stats <- my_tests$table %>% 
-  as.data.frame() %>% 
-  rownames_to_column() %>% 
-  rename(gene = rowname, 
-         p.value = PValue, 
-         estimate = logFC) %>% 
-  tbl_df() %>% 
-  select(gene, estimate, p.value) %>% 
-  left_join(gene.annotation, by = "gene") %>% 
-  arrange(gene)
-
-my_stats$fdr <- p.adjust(my_stats$p.value, method = "BH")
-
-my_stats %>% 
-  filter(symbol == "Gm22748")
-
-fi.post <- tidy(mingled.mcmc, pars = "fi", conf.int = TRUE, conf.level = 0.95, conf.method = "HPDinterval")
-colnames(fi.post) <- str_c("fi_", colnames(fi.post))
-
-fe.post <- tidy(mingled.mcmc, pars = "fer_max", conf.int = TRUE, conf.level = 0.95, conf.method = "HPDinterval")
-colnames(fe.post) <- str_c("fer_", colnames(fe.post))
-
-fife <- fi.post %>% 
-  bind_cols(fe.post)
-
-fife_rna <- fife %>% 
-  mutate(mouse_id = str_sub(fi_term, 4, -2)) %>% 
-  semi_join(mouse_rna.df, by = "mouse_id")
-
-ggplot(fife, aes(x = fer_estimate, y = fi_estimate)) + 
-  geom_point(shape = 1, size = 3) + 
-  geom_point(data = fife_rna , size = 3, color = "blue") + 
-  geom_errorbarh(aes(xmin = fer_conf.low, xmax = fer_conf.high), alpha = 0.3) + 
-  geom_errorbar(aes(ymin = fi_conf.low, ymax = fi_conf.high), alpha = 0.3) + 
-  labs(x = "Posterior mean of maximum feed efficiency (g BW gain/g Food)", 
-       y = "Posterior mean of food intake (g/day)") + 
-  theme_bw() + 
-  theme(axis.title = element_text(size = 12), 
-        axis.text = element_text(size = 12))
-
-tidy(mingled.mcmc, pars = c("fer_max", "bw_max"))
