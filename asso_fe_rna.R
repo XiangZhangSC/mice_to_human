@@ -26,9 +26,8 @@ run_edgeR <- function(dat.x, dat.y) {
   
   Batch <- factor(dat.x$Reagent)
   Group <- factor(dat.x$group, levels = c("1 month", "3 months", "6 months"))
-  #zAge <- (dat.x$age_day - mean(dat.x$age_day)) / sd(dat.x$age_day)
-  #mod1 <- model.matrix(~Batch + zAge + zFER)
-  mod1 <- model.matrix(~Batch + Group + zFER)
+  zAge <- (dat.x$age_day - mean(dat.x$age_day)) / sd(dat.x$age_day)
+  mod1 <- model.matrix(~Batch + Group + zAge + zFER)
   my_dispersions <- estimateDisp(dat.y, design = mod1)
   my_fits <- glmFit(dat.y, design = mod1, dispersion = my_dispersions$tagwise.dispersion, offset = log(sequencing_depth$N))
   my_tests <- glmLRT(my_fits, coef = "zFER")
@@ -190,7 +189,7 @@ fer.nested <- fer.nested %>%
   as_tibble()
 
 write_rds(fer.nested, "association_fer_transcriptomics.rds")
-#fer.nested <- read_rds("association_fer_transcriptomics.rds")
+fer.nested <- read_rds("association_fer_transcriptomics.rds")
 
 fer2rna <- fer.nested %>% 
   select(-data) %>% 
