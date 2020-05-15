@@ -25,10 +25,10 @@ run_edgeR <- function(dat.x, dat.y) {
   zFER <- ( fer - mean(fer) ) / sd(fer)
   
   Batch <- factor(dat.x$Reagent)
-  Group <- factor(dat.x$group, levels = c("1 month", "3 month", "6 month"))
+  Group <- factor(dat.x$group, levels = c("1 month", "3 months", "6 months"))
   #zAge <- (dat.x$age_day - mean(dat.x$age_day)) / sd(dat.x$age_day)
   #mod1 <- model.matrix(~Batch + zAge + zFER)
-  mod1 <- model.matrix(~Batch + zFER)
+  mod1 <- model.matrix(~Batch + Group + zFER)
   my_dispersions <- estimateDisp(dat.y, design = mod1)
   my_fits <- glmFit(dat.y, design = mod1, dispersion = my_dispersions$tagwise.dispersion, offset = log(sequencing_depth$N))
   my_tests <- glmLRT(my_fits, coef = "zFER")
@@ -220,11 +220,10 @@ ggplot(fer2rna.sig, aes(`Mean beta`, -log10(`Mean pval`))) +
   geom_point(data = fer2rna.sig2, color = "red") + 
   geom_text_repel(data = fer2rna.sig2, aes(label = symbol)) + 
   labs(x = "Mean log(Fold change)", y = "-log10(Mean P value)") + 
-  facet_warp(~group, scale = "free_y", ncol = 3)
   theme_bw() + 
   theme(axis.title = element_text(size = 12), 
         strip.text = element_text(size = 12))
 
-ggsave("asso_fer_liver_gene.pdf", height = 100, width = 300, units = "mm", dpi = 300)
+ggsave("asso_fer_liver_gene.pdf", height = 200, width = 200, units = "mm", dpi = 300)
 
 
