@@ -93,8 +93,8 @@ mouse.df <- tibble(mouse_id = as.character(seq(from = 1, to = 105)),
 #########################################################################
 
 # load feed efficiency data
-mingled.mcmc <- read_stan_csv("/home/xiang/stan/cmdstan-2.19.1/MINGLeD2/output.csv")
-#mingled.mcmc <- read_stan_csv("/home/xiang/cmdstan-2.19.1/mingled/output.csv")
+#mingled.mcmc <- read_stan_csv("/home/xiang/stan/cmdstan-2.19.1/MINGLeD2/output.csv")
+mingled.mcmc <- read_stan_csv("/home/xiang/cmdstan-2.19.1/mingled/output.csv")
 
 tidy(mingled.mcmc, pars = c("fer_max", "bw_max"), estimate.method = "mean", conf.int = TRUE, conf.level = 0.95, conf.method = "HPDinterval")
 
