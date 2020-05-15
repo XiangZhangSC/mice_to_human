@@ -24,9 +24,7 @@ run_edgeR <- function(dat.x, dat.y) {
   
   zFER <- ( fer - mean(fer) ) / sd(fer)
   
-  Batch <- factor(dat.x$Reagent)
-  Group <- factor(dat.x$group, levels = c("1M", "3M", "6MA", "6MC"))
-  mod1 <- model.matrix(~Batch + Group + zFER)
+  mod1 <- model.matrix(~zFER)
   my_dispersions <- estimateDisp(dat.y, design = mod1)
   my_fits <- glmFit(dat.y, design = mod1, dispersion = my_dispersions$tagwise.dispersion, offset = log(sequencing_depth$N))
   my_tests <- glmLRT(my_fits, coef = "zFER")
@@ -84,7 +82,7 @@ mouse.df <- tibble(mouse_id = as.character(seq(from = 1, to = 105)),
                    M_sacrifice = as.character(paalvast_mice$M_sacrifice), 
                    day = paalvast_mice$day, 
                    age_day = paalvast_mice$age_day) %>% 
-  filter(group != "2M") # 2 month feeding mice were processed only with Reagent 2
+  filter(group == "2M") # 2 month feeding mice were processed only with Reagent 2
 
 # total counts for each RNA samples
 sequencing_depth <- rna %>% 
@@ -134,7 +132,7 @@ ggplot(fer, aes(fct_inorder(mouse), fer)) +
         axis.title.y = element_text(size = 15),
         axis.text.x = element_text(angle = 90))
 
-ggsave("fe_sacrifice.pdf", height = 200, width = 220, units = "mm", dpi = 300)
+ggsave("fe_sacrifice_2month.pdf", height = 100, width = 100, units = "mm", dpi = 300)
 
 # genes with too many zero counts will be excluded
 nonzero_counts <- rna %>% 
@@ -144,7 +142,7 @@ nonzero_counts <- rna %>%
   summarize(n_nonzero = sum(y != 0))
 
 keep_genes <- nonzero_counts %>% 
-  filter(n_nonzero >= 30)
+  filter(n_nonzero == 10)
 
 dat.rna <- rna %>% 
   semi_join(keep_genes, by = "probe") %>% 
@@ -186,8 +184,8 @@ fer.nested <- fer.nested %>%
   collect() %>% 
   as_tibble()
 
-write_rds(fer.nested, "association_fer_transcriptomics.rds")
-#fer.nested <- read_rds("association_fer_transcriptomics.rds")
+write_rds(fer.nested, "association_fer_transcriptomics_2month.rds")
+#fer.nested <- read_rds("association_fer_transcriptomics_2month.rds")
 
 fer2rna <- fer.nested %>% 
   select(-data) %>% 
@@ -206,7 +204,7 @@ fer2rna.sig <- fer2rna %>%
             `High FDR` = quantile(FDR, probs = 0.975), 
             `How many times FDR is below 0.05` = sum(FDR < 0.05))
 
-write_csv(fer2rna.sig, "Association_feed_efficiency_liver_gene_expression.csv")
+write_csv(fer2rna.sig, "Association_feed_efficiency_liver_gene_expression_2month.csv")
 
 fer2rna.sig2 <- fer2rna.sig %>% 
   filter(`How many times FDR is below 0.05` > 500)
@@ -221,6 +219,6 @@ ggplot(fer2rna.sig, aes(`Mean beta`, -log10(`Mean pval`))) +
   theme(axis.title = element_text(size = 12), 
         strip.text = element_text(size = 12))
 
-ggsave("asso_fer_liver_gene.pdf", height = 200, width = 200, units = "mm", dpi = 300)
+ggsave("asso_fer_liver_gene_2month.pdf", height = 200, width = 200, units = "mm", dpi = 300)
 
 
