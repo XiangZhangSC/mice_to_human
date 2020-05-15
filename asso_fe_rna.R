@@ -211,8 +211,7 @@ fer2rna.sig <- fer2rna %>%
 write_csv(fer2rna.sig, "Association_feed_efficiency_liver_gene_expression.csv")
 
 fer2rna.sig2 <- fer2rna.sig %>% 
-  filter(`How many times FDR is below 0.05` > 500) %>% 
-  arrange(desc(`How many times FDR is below 0.05`))
+  filter(`How many times FDR is below 0.05` == 1000)
 
 # volcano plot
 ggplot(fer2rna.sig, aes(`Mean beta`, -log10(`Mean pval`))) + 
