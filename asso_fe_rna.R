@@ -25,9 +25,8 @@ run_edgeR <- function(dat.x, dat.y) {
   zFER <- ( fer - mean(fer) ) / sd(fer)
   
   Batch <- factor(dat.x$Reagent)
-  Group <- factor(dat.x$group, levels = c("1 month", "3 months", "6 months"))
-  zAge <- (dat.x$age_day - mean(dat.x$age_day)) / sd(dat.x$age_day)
-  mod1 <- model.matrix(~Batch + Group + zAge + zFER)
+  Group <- factor(dat.x$group, levels = c("1M", "3M", "6MA", "6MC"))
+  mod1 <- model.matrix(~Batch + Group + zFER)
   my_dispersions <- estimateDisp(dat.y, design = mod1)
   my_fits <- glmFit(dat.y, design = mod1, dispersion = my_dispersions$tagwise.dispersion, offset = log(sequencing_depth$N))
   my_tests <- glmLRT(my_fits, coef = "zFER")
@@ -85,21 +84,7 @@ mouse.df <- tibble(mouse_id = as.character(seq(from = 1, to = 105)),
                    M_sacrifice = as.character(paalvast_mice$M_sacrifice), 
                    day = paalvast_mice$day, 
                    age_day = paalvast_mice$age_day) %>% 
-  filter(group != "2M") # 2 month feeding mice were processed only Reagent 2
-
-#########################################################################
-# 2. Preprocessing
-#########################################################################
-
-# load feed efficiency data
-#mingled.mcmc <- read_stan_csv("/home/xiang/stan/cmdstan-2.19.1/MINGLeD2/output.csv")
-mingled.mcmc <- read_stan_csv("/home/xiang/cmdstan-2.19.1/mingled/output.csv")
-
-tidy(mingled.mcmc, pars = c("fer_max", "bw_max"), estimate.method = "mean", conf.int = TRUE, conf.level = 0.95, conf.method = "HPDinterval")
-
-tidy(mingled.mcmc, pars = c("mu_fi", "sigma_fi"), estimate.method = "mean", conf.int = TRUE, conf.level = 0.95, conf.method = "HPDinterval")
-
-post <- tidy_draws(mingled.mcmc)
+  filter(group != "2M") # 2 month feeding mice were processed only with Reagent 2
 
 # total counts for each RNA samples
 sequencing_depth <- rna %>% 
@@ -116,14 +101,27 @@ mouse_rna.df <- mouse.df %>%
   mutate(M_sacrifice = as.character(M_sacrifice), 
          Batch = as.character(Batch))
 
+#########################################################################
+# 2. Preprocessing
+#########################################################################
+
+# load feed efficiency data
+#mingled.mcmc <- read_stan_csv("/home/xiang/stan/cmdstan-2.19.1/MINGLeD2/output.csv")
+mingled.mcmc <- read_stan_csv("/home/xiang/cmdstan-2.19.1/mingled/output.csv")
+
+tidy(mingled.mcmc, pars = c("fer_max", "bw_max"), estimate.method = "mean", conf.int = TRUE, conf.level = 0.95, conf.method = "HPDinterval")
+
+tidy(mingled.mcmc, pars = c("mu_fi", "sigma_fi"), estimate.method = "mean", conf.int = TRUE, conf.level = 0.95, conf.method = "HPDinterval")
+
+post <- tidy_draws(mingled.mcmc)
+
 fer <- post %>% 
   select(.iteration, fer_sacrifice.1:fer_sacrifice.105) %>% 
   gather(what, fer, -.iteration) %>% 
   separate(what, into = c("what", "mouse_id"), sep = "\\.") %>% 
   select(-what) %>% 
   inner_join(mouse_rna.df, by = "mouse_id") %>% 
-  mutate(group = factor(group, levels = c("1M", "2M", "3M", "6MA", "6MC"), 
-                        labels = c("1 month", "2 months", "3 months", "6 months", "6 months"))) %>% 
+  mutate(group = factor(group, levels = c("1M", "2M", "3M", "6MA", "6MC"))) %>% 
   arrange(group)
 
 ggplot(fer, aes(fct_inorder(mouse), fer)) + 
@@ -189,7 +187,7 @@ fer.nested <- fer.nested %>%
   as_tibble()
 
 write_rds(fer.nested, "association_fer_transcriptomics.rds")
-fer.nested <- read_rds("association_fer_transcriptomics.rds")
+#fer.nested <- read_rds("association_fer_transcriptomics.rds")
 
 fer2rna <- fer.nested %>% 
   select(-data) %>% 
@@ -211,7 +209,7 @@ fer2rna.sig <- fer2rna %>%
 write_csv(fer2rna.sig, "Association_feed_efficiency_liver_gene_expression.csv")
 
 fer2rna.sig2 <- fer2rna.sig %>% 
-  filter(`How many times FDR is below 0.05` == 1000)
+  filter(`How many times FDR is below 0.05` > 500)
 
 # volcano plot
 ggplot(fer2rna.sig, aes(`Mean beta`, -log10(`Mean pval`))) + 
