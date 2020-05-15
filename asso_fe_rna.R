@@ -12,7 +12,7 @@ library(multidplyr)
 library(broom)
 library(stringr)
 library(forcats)
-library(ggrepel)
+#library(ggrepel)
 
 ###########################################
 # 1. Import data
@@ -211,18 +211,18 @@ fer2rna.sig <- fer2rna %>%
 
 write_csv(fer2rna.sig, "Association_feed_efficiency_liver_gene_expression.csv")
 
-fer2rna.sig2 <- fer2rna.sig %>% 
-  filter(`How many times FDR is below 0.05` == 1000)
+#fer2rna.sig2 <- fer2rna.sig %>% 
+#  filter(`How many times FDR is below 0.05` == 1000)
 
 # volcano plot
-ggplot(fer2rna.sig, aes(`Mean beta`, -log10(`Mean pval`))) + 
-  geom_point(alpha = 0.1) + 
-  geom_point(data = fer2rna.sig2, color = "red") + 
-  geom_text_repel(data = fer2rna.sig2, aes(label = symbol)) + 
-  labs(x = "Mean log(Fold change)", y = "-log10(Mean P value)") + 
-  theme_bw() + 
-  theme(axis.title = element_text(size = 12))
+#ggplot(fer2rna.sig, aes(`Mean beta`, -log10(`Mean pval`))) + 
+#  geom_point(alpha = 0.1) + 
+#  geom_point(data = fer2rna.sig2, color = "red") + 
+#  geom_text_repel(data = fer2rna.sig2, aes(label = symbol)) + 
+#  labs(x = "Mean log(Fold change)", y = "-log10(Mean P value)") + 
+#  theme_bw() + 
+#  theme(axis.title = element_text(size = 12))
 
-ggsave("asso_fer_liver_gene.pdf", height = 220, width = 220, units = "mm", dpi = 300)
+#ggsave("asso_fer_liver_gene.pdf", height = 220, width = 220, units = "mm", dpi = 300)
 
 
