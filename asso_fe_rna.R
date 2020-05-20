@@ -315,7 +315,8 @@ xiang_cluster_1 <- new_cluster(n = 22) %>%
   cluster_copy("run_nb_1") %>% 
   cluster_copy("dat.rna.1M") %>% 
   cluster_copy("gene.annotation") %>% 
-  cluster_copy("sequencing_depth_1M")
+  cluster_copy("sequencing_depth_1M") %>% 
+  cluster_copy("calc_gene_stat")
 
 fer_1M_nested <- fer_1M_nested %>% 
   group_by(.iteration) %>% 
@@ -337,7 +338,8 @@ xiang_cluster_2 <- new_cluster(n = 22) %>%
   cluster_copy("run_nb_2") %>% 
   cluster_copy("dat.rna.2M") %>% 
   cluster_copy("gene.annotation") %>% 
-  cluster_copy("sequencing_depth_2M")
+  cluster_copy("sequencing_depth_2M") %>% 
+  cluster_copy("calc_gene_stat")
 
 fer_2M_nested <- fer_2M_nested %>% 
   group_by(.iteration) %>% 
@@ -359,7 +361,8 @@ xiang_cluster_3 <- new_cluster(n = 22) %>%
   cluster_copy("run_nb_1") %>% 
   cluster_copy("dat.rna.3M") %>% 
   cluster_copy("gene.annotation") %>% 
-  cluster_copy("sequencing_depth_3M")
+  cluster_copy("sequencing_depth_3M") %>% 
+  cluster_copy("calc_gene_stat")
 
 fer_3M_nested <- fer_3M_nested %>% 
   group_by(.iteration) %>% 
@@ -381,7 +384,8 @@ xiang_cluster_4 <- new_cluster(n = 22) %>%
   cluster_copy("run_nb_3") %>% 
   cluster_copy("dat.rna.6M") %>% 
   cluster_copy("gene.annotation") %>% 
-  cluster_copy("sequencing_depth_6M")
+  cluster_copy("sequencing_depth_6M") %>% 
+  cluster_copy("calc_gene_stat")
 
 fer_6M_nested <- fer_6M_nested %>% 
   group_by(.iteration) %>% 
