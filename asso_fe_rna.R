@@ -327,6 +327,8 @@ fer_1M_nested <- fer_1M_nested %>%
 
 fer_1M_nested$group <- "1 month"
 
+print("1 month group analysis is finished")
+
 # 2M group
 xiang_cluster_2 <- new_cluster(n = 22) %>% 
   cluster_library("edgeR") %>% 
@@ -349,6 +351,8 @@ fer_2M_nested <- fer_2M_nested %>%
   as_tibble()
 
 fer_2M_nested$group <- "2 months"
+
+print("2 month group analysis is finished")
 
 # 3M group
 xiang_cluster_3 <- new_cluster(n = 22) %>% 
@@ -373,6 +377,8 @@ fer_3M_nested <- fer_3M_nested %>%
 
 fer_3M_nested$group <- "3 months"
 
+print("3 month group analysis is finished")
+
 # 6M group
 xiang_cluster_4 <- new_cluster(n = 22) %>% 
   cluster_library("edgeR") %>% 
@@ -396,6 +402,8 @@ fer_6M_nested <- fer_6M_nested %>%
 
 fer_6M_nested$group <- "6 months"
 
+print("6 month group analysis is finished")
+
 # combine all the gene-level statistics
 fer.nested <- fer_1M_nested %>% 
   bind_rows(fer_2M_nested) %>% 
@@ -415,9 +423,9 @@ fer2rna <- fer.nested %>%
 
 fer2rna.sig <- fer2rna %>% 
   group_by(symbol, group) %>% 
-  summarise(`Mean beta` = mean(estimate), 
-            `Low beta` = quantile(estimate, probs = 0.025), 
-            `High beta` = quantile(estimate, probs = 0.975), 
+  summarise(`Mean logFC` = mean(logFC), 
+            `Low logFC` = quantile(logFC, probs = 0.025), 
+            `High logFC` = quantile(logFC, probs = 0.975), 
             `Mean pval` = mean(p.value), 
             `Low pval` = quantile(p.value, probs = 0.025), 
             `High pval` = quantile(p.value, probs = 0.975), 
@@ -432,7 +440,7 @@ fer2rna.sig2 <- fer2rna.sig %>%
   filter(`How many times FDR is below 0.05` > 500)
 
 # volcano plot
-ggplot(fer2rna.sig, aes(`Mean beta`, -log10(`Mean pval`))) + 
+ggplot(fer2rna.sig, aes(`Mean logFC`, -log10(`Mean pval`))) + 
   geom_point(alpha = 0.1) + 
   geom_point(data = fer2rna.sig2, color = "red") + 
   geom_text_repel(data = fer2rna.sig2, aes(label = symbol)) + 
