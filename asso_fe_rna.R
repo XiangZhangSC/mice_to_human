@@ -309,9 +309,8 @@ calc_path_stat <- function(dat.y, mod, sequencing_depth) {
   my_dispersions <- estimateDisp(dat.y, design = mod)
   my_fits <- glmFit(dat.y, design = mod, dispersion = my_dispersions$tagwise.dispersion, offset = log(sequencing_depth$N))
   my_tests <- glmLRT(my_fits, coef = "zFER")
-  # Pathway analysis (pathways with at most 30 genes)
   my_gsea <- kegga(my_tests, species = 'Mm')
-  my_gsea_stats <- topKEGG(my_gsea, num = Inf, truncate.path = 30)
+  my_gsea_stats <- topKEGG(my_gsea, number = Inf)
   
   return(my_gsea_stats)
 }
