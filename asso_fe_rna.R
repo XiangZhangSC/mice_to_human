@@ -97,8 +97,27 @@ fer <- post %>%
 
 # Because RNA isolation was not well randomized
 # the analysis will be performed within each cohort
-mouse_rna.df %>% count(group, Reagent, Batch)
+removed_samples <- tibble(
+  group = c("1M", "3M", "6MA", "6MC"), 
+  Reagent = c("R1", "R1", "R1", "R2"), 
+  Batch = c("2", "1", "1", "2")
+)
 
+mouse_rna.df %>% 
+  count(group, Reagent, Batch) %>% 
+  ggplot(aes(Batch, Reagent)) + 
+  geom_point(aes(size = n)) + 
+  theme_bw() + 
+  facet_wrap(~group)
+
+mouse_rna.df %>% 
+  anti_join(removed_samples, by = c("group", "Reagent", "Batch")) %>% 
+  count(group, Reagent, Batch) %>% 
+  ggplot(aes(Batch, Reagent)) + 
+  geom_point(aes(size = n)) + 
+  theme_bw() + 
+  facet_wrap(~group)
+    
 # In 1M group, 
 # if a RNA sample was isolated on day 1, reagent 1 was used
 # if a RNA sample was isolated on day 3, reagent 2 was used 
@@ -152,14 +171,14 @@ dat_fer <- fer_1M %>%
 ggplot(dat_fer, aes(fct_inorder(mouse), fer)) + 
   geom_boxplot(aes(fill = group)) + 
   scale_fill_brewer(palette = "Set1") + 
-  labs(x = "Mouse", y = "Feed Efficiency (g BW gain/g Food)") + 
+  labs(x = "Mouse", y = "Feed Efficiency (g body weight gain/g food intake)") + 
   theme_bw() + 
   theme(legend.position = c(0.9,0.9), 
         axis.text.y = element_text(size = 12), 
         axis.title.y = element_text(size = 15),
         axis.text.x = element_text(angle = 90))
 
-ggsave("fe_sacrifice.pdf", height = 200, width = 220, units = "mm", dpi = 300)
+ggsave("fe_sacrifice.png", height = 200, width = 220, units = "mm", dpi = 300)
 
 # genes with too many zero counts will be excluded
 nonzero_counts <- rna %>% 
@@ -179,6 +198,32 @@ dat.rna <- rna %>%
   column_to_rownames("probe") %>% 
   select(-gene) %>% 
   as.matrix()
+
+ensembl_ncbi <- read_xlsx("1605_Paalvast_Lexogen.expression.genelevel.v82.htseq.xlsx", sheet = "keys")
+ensembl_ncbi <- ensembl_ncbi %>% 
+  select(`Ensembl Gene ID`, `Associated Gene Name`, `EntrezGene ID`) %>% 
+  rename(ensembl_id = `Ensembl Gene ID`, 
+         gene_symbol = `Associated Gene Name`, 
+         entrez_id = `EntrezGene ID`) %>% 
+  filter(ensembl_id %in% row.names(dat.rna)) %>% 
+  arrange(ensembl_id)
+
+#
+# To perform GSEA, Entrez ids are required
+#
+for (i in 1:nrow(dat.rna)) {
+  ensembl_id <- row.names(dat.rna)[i]
+  # If an Ensembl id has no Entrez id, the Ensembl id will be kept as the row name 
+  if (sum(ensembl_id %in% ensembl_ncbi$ensembl_id) > 0 & sum(is.na(ensembl_ncbi$entrez_id[which(ensembl_ncbi$ensembl_id == ensembl_id)]) == 0)) {
+    # If an Ensembl id has multiple Entrez ids, the first Entrez id will be used
+    if (length(ensembl_ncbi$entrez_id[which(ensembl_ncbi$ensembl_id == ensembl_id)]) > 1) {
+      row.names(dat.rna)[i] <- ensembl_ncbi$entrez_id[which(ensembl_ncbi$ensembl_id == ensembl_id)][1]
+    } else {
+      row.names(dat.rna)[i] <- ensembl_ncbi$entrez_id[which(ensembl_ncbi$ensembl_id == ensembl_id)] 
+    }
+  }
+  ensembl_ncbi$gene[i] <- row.names(dat.rna)[i]
+}
 
 #
 # Subset the gene expression data corresponding to different groups
@@ -245,6 +290,9 @@ calc_gene_stat <- function(dat.y, mod, sequencing_depth) {
   my_dispersions <- estimateDisp(dat.y, design = mod)
   my_fits <- glmFit(dat.y, design = mod, dispersion = my_dispersions$tagwise.dispersion, offset = log(sequencing_depth$N))
   my_tests <- glmLRT(my_fits, coef = "zFER")
+  # Pathway analysis (pathways with at most 30 genes)
+  my_gsea <- kegga(my_tests, species = 'Mm')
+  my_gsea_stats <- topKEGG(my_gsea, num = Inf, truncate.path = 30)
   my_stats <- my_tests$table %>% 
     as.data.frame() %>% 
     rownames_to_column() %>% 
@@ -252,12 +300,16 @@ calc_gene_stat <- function(dat.y, mod, sequencing_depth) {
            p.value = PValue) %>% 
     tbl_df() %>% 
     select(gene, logFC, p.value) %>% 
-    left_join(gene.annotation, by = "gene") %>% 
+    left_join(ensembl_ncbi, by = "gene") %>% 
     arrange(gene)
   
   my_stats$FDR <- p.adjust(my_stats$p.value, method = "BH")
   
-  return(my_stats)
+  my_output <- list()
+  my_output$gene_level_stats <- my_stats
+  my_output$pathway_level_stats <- my_gsea_stats
+  
+  return(my_output)
 }
 
 # negative binomial regression for 1M and 3M group
@@ -417,38 +469,38 @@ write_rds(fer.nested, "association_fer_transcriptomics.rds")
 # 4. Visualizing associations between feed efficiency and liver gene expression
 ################################################################################
 
-fer2rna <- fer.nested %>% 
-  select(-data) %>% 
-  unnest(result)
+#fer2rna <- fer.nested %>% 
+#  select(-data) %>% 
+#  unnest(result)
 
-fer2rna.sig <- fer2rna %>% 
-  group_by(symbol, group) %>% 
-  summarise(`Mean logFC` = mean(logFC), 
-            `Low logFC` = quantile(logFC, probs = 0.025), 
-            `High logFC` = quantile(logFC, probs = 0.975), 
-            `Mean pval` = mean(p.value), 
-            `Low pval` = quantile(p.value, probs = 0.025), 
-            `High pval` = quantile(p.value, probs = 0.975), 
-            `Mean FDR` = mean(FDR), 
-            `Low FDR` = quantile(FDR, probs = 0.025), 
-            `High FDR` = quantile(FDR, probs = 0.975), 
-            `How many times FDR is below 0.05` = sum(FDR < 0.05))
+#fer2rna.sig <- fer2rna %>% 
+#  group_by(symbol, group) %>% 
+#  summarise(`Mean logFC` = mean(logFC), 
+#            `Low logFC` = quantile(logFC, probs = 0.025), 
+#            `High logFC` = quantile(logFC, probs = 0.975), 
+#            `Mean pval` = mean(p.value), 
+#            `Low pval` = quantile(p.value, probs = 0.025), 
+#            `High pval` = quantile(p.value, probs = 0.975), 
+#            `Mean FDR` = mean(FDR), 
+#            `Low FDR` = quantile(FDR, probs = 0.025), 
+#            `High FDR` = quantile(FDR, probs = 0.975), 
+#            `How many times FDR is below 0.05` = sum(FDR < 0.05))
 
-write_csv(fer2rna.sig, "Association_feed_efficiency_liver_gene_expression.csv")
+#write_csv(fer2rna.sig, "Association_feed_efficiency_liver_gene_expression.csv")
 
-fer2rna.sig2 <- fer2rna.sig %>% 
-  filter(`How many times FDR is below 0.05` > 500)
+#fer2rna.sig2 <- fer2rna.sig %>% 
+#  filter(`How many times FDR is below 0.05` >= 950 & abs(`Mean logFC`) >= 0.6)
 
 # volcano plot
-ggplot(fer2rna.sig, aes(`Mean logFC`, -log10(`Mean pval`))) + 
-  geom_point(alpha = 0.1) + 
-  geom_point(data = fer2rna.sig2, color = "red") + 
-  geom_text_repel(data = fer2rna.sig2, aes(label = symbol)) + 
-  labs(x = "Mean log(Fold change)", y = "-log10(Mean P value)") + 
-  facet_wrap(~group) + 
-  theme_bw() + 
-  theme(axis.title = element_text(size = 12), 
-        strip.text = element_text(size = 12))
+#ggplot(fer2rna.sig, aes(`Mean logFC`, -log10(`Mean pval`))) + 
+#  geom_point(alpha = 0.1) + 
+#  geom_point(data = fer2rna.sig2, color = "red") + 
+#  geom_text_repel(data = fer2rna.sig2, aes(label = symbol)) + 
+#  labs(x = "Mean log(Fold change)", y = "-log10(Mean P value)") + 
+#  facet_wrap(~group) + 
+#  theme_bw() + 
+#  theme(axis.title = element_text(size = 12), 
+#        strip.text = element_text(size = 12))
 
 ggsave("asso_fer_liver_gene.pdf", height = 200, width = 200, units = "mm", dpi = 300)
 
