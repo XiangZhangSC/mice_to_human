@@ -16,6 +16,9 @@ calc_path_stat <- function(dat.y, mod, sequencing_depth) {
                    gene.pathway = mouse_kegg_pathway, 
                    pathway.names = mouse_kegg_pathway_name)
   
+  my_gsea$FDR.Up <- p.adjust(my_gsea$P.Up, method = "fdr")
+  my_gsea$FDR.Down <- p.adjust(my_gsea$P.Down, method = "fdr")
+  
   return(my_gsea)
 }
 
@@ -80,7 +83,8 @@ run_path_3 <- function(dat.x, dat.y, sequencing_depth) {
 #
 
 mouse_kegg_pathway <- getGeneKEGGLinks(species.KEGG = 'mmu', convert = TRUE)
-mouse_kegg_pathway_name <- getKEGGPathwayNames(species.KEGG = 'mmu')
+mouse_kegg_pathway_name <- getKEGGPathwayNames(species.KEGG = 'mmu', 
+                                               remove.qualifier = TRUE)
 
 # 1M group
 xiang_cluster_1 <- new_cluster(n = 22) %>% 
