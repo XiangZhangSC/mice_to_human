@@ -14,7 +14,9 @@ source("data_for_asso_fe_rna.R")
 # negative binomial regression model
 calc_gene_stat <- function(dat.y, mod, sequencing_depth) {
   my_dispersions <- estimateDisp(dat.y, design = mod)
-  my_fits <- glmFit(dat.y, design = mod, dispersion = my_dispersions$tagwise.dispersion, offset = log(sequencing_depth$N))
+  my_fits <- glmFit(dat.y, design = mod, 
+                    dispersion = my_dispersions$tagwise.dispersion, 
+                    offset = log(sequencing_depth$N))
   my_tests <- glmLRT(my_fits, coef = "zFER")
   my_stats <- my_tests$table %>% 
     as.data.frame() %>% 
@@ -23,7 +25,7 @@ calc_gene_stat <- function(dat.y, mod, sequencing_depth) {
            p.value = PValue) %>% 
     tbl_df() %>% 
     select(gene, logFC, p.value) %>% 
-    left_join(ensembl_ncbi, by = "gene") %>% 
+    left_join(ensembl_ncbi_final, by = "gene") %>% 
     arrange(gene)
   
   my_stats$FDR <- p.adjust(my_stats$p.value, method = "BH")
@@ -102,7 +104,7 @@ xiang_cluster_1 <- new_cluster(n = 22) %>%
   cluster_copy("build_mod_1") %>% 
   cluster_copy("run_nb_1") %>% 
   cluster_copy("dat.rna.1M") %>% 
-  cluster_copy("ensembl_ncbi") %>% 
+  cluster_copy("ensembl_ncbi_final") %>% 
   cluster_copy("sequencing_depth_1M") %>% 
   cluster_copy("calc_gene_stat")
 
@@ -127,7 +129,7 @@ xiang_cluster_2 <- new_cluster(n = 22) %>%
   cluster_copy("build_mod_2") %>% 
   cluster_copy("run_nb_2") %>%
   cluster_copy("dat.rna.2M") %>% 
-  cluster_copy("ensembl_ncbi") %>% 
+  cluster_copy("ensembl_ncbi_final") %>% 
   cluster_copy("sequencing_depth_2M") %>% 
   cluster_copy("calc_gene_stat") 
 
@@ -152,7 +154,7 @@ xiang_cluster_3 <- new_cluster(n = 22) %>%
   cluster_copy("build_mod_1") %>% 
   cluster_copy("run_nb_1") %>% 
   cluster_copy("dat.rna.3M") %>% 
-  cluster_copy("ensembl_ncbi") %>% 
+  cluster_copy("ensembl_ncbi_final") %>% 
   cluster_copy("sequencing_depth_3M") %>% 
   cluster_copy("calc_gene_stat")
 
@@ -177,7 +179,7 @@ xiang_cluster_4 <- new_cluster(n = 22) %>%
   cluster_copy("build_mod_3") %>% 
   cluster_copy("run_nb_3") %>% 
   cluster_copy("dat.rna.6M") %>% 
-  cluster_copy("ensembl_ncbi") %>% 
+  cluster_copy("ensembl_ncbi_final") %>% 
   cluster_copy("sequencing_depth_6M") %>% 
   cluster_copy("calc_gene_stat")
 

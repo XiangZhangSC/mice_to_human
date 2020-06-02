@@ -204,26 +204,43 @@ ensembl_ncbi <- ensembl_ncbi %>%
   select(`Ensembl Gene ID`, `Associated Gene Name`, `EntrezGene ID`) %>% 
   rename(ensembl_id = `Ensembl Gene ID`, 
          gene_symbol = `Associated Gene Name`, 
-         entrez_id = `EntrezGene ID`) %>% 
-  filter(ensembl_id %in% row.names(dat.rna)) %>% 
-  arrange(ensembl_id)
+         entrez_id = `EntrezGene ID`)
 
 #
 # To perform GSEA, Entrez ids are required
+# The RNA data used Ensembl id, I have to convert into Entrez IDs
 #
-for (i in 1:nrow(dat.rna)) {
-  ensembl_id <- row.names(dat.rna)[i]
-  # If an Ensembl id has no Entrez id, the Ensembl id will be kept as the row name 
-  if (sum(ensembl_id %in% ensembl_ncbi$ensembl_id) > 0 & sum(is.na(ensembl_ncbi$entrez_id[which(ensembl_ncbi$ensembl_id == ensembl_id)]) == 0)) {
-    # If an Ensembl id has multiple Entrez ids, the first Entrez id will be used
-    if (length(ensembl_ncbi$entrez_id[which(ensembl_ncbi$ensembl_id == ensembl_id)]) > 1) {
-      row.names(dat.rna)[i] <- ensembl_ncbi$entrez_id[which(ensembl_ncbi$ensembl_id == ensembl_id)][1]
-    } else {
-      row.names(dat.rna)[i] <- ensembl_ncbi$entrez_id[which(ensembl_ncbi$ensembl_id == ensembl_id)] 
-    }
-  }
-  ensembl_ncbi$gene[i] <- row.names(dat.rna)[i]
-}
+
+ori_gene_ids <- tibble(ensembl_id = row.names(dat.rna))
+gene_id_mapping <- ori_gene_ids %>% 
+  left_join(ensembl_ncbi, by = "ensembl_id")
+
+# There are 133 ensembl ids having multiple entrez ids
+
+gene_id_mapping %>% 
+  count(ensembl_id) %>% 
+  filter(n > 1) %>% 
+  arrange(desc(n))
+
+# After manual check, I found that the Entrez id should be the one 
+# corresponding to the Ensembl id
+# Therefore, I have to remove the redundant rows in the ensembl_ncbi table
+
+ensembl_ncbi_new <- gene_id_mapping %>% 
+  group_by(ensembl_id, gene_symbol) %>% 
+  summarize(entrez_id = min(entrez_id))
+
+identical(ensembl_ncbi_new$ensembl_id, row.names(dat.rna))
+
+row.names(dat.rna) <- ensembl_ncbi_new$entrez_id
+# if a Ensembl id has no Entrez id, then the Ensembl id will be used as the final
+# gene id
+gene_without_entrez <- which(is.na(row.names(dat.rna)))
+row.names(dat.rna)[gene_without_entrez] <- ensembl_ncbi_new$ensembl_id[gene_without_entrez]
+
+ensembl_ncbi_final <- ensembl_ncbi_new %>% 
+  ungroup() %>% 
+  mutate(gene = row.names(dat.rna))
 
 #
 # Subset the gene expression data corresponding to different groups
